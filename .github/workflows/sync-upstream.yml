@@ -1,7 +1,8 @@
 name: Sync upstream release
 
 # Daily: when router-for-me publishes a new vX.Y.Z tag, merge it into this
-# fork's main, run the full verification, and publish vX.Y.Z-camescasse.1.
+# fork's main, check it (no new test failures, lint, build), and publish
+# vX.Y.Z-camescasse.1.
 # CLIProxyAPI (management.panel-github-repository) then downloads it within 3 hours.
 #
 # A tag pushed with GITHUB_TOKEN does not start release.yml, so this workflow
@@ -12,6 +13,15 @@ on:
   schedule:
     - cron: '23 7 * * *'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Merge, check and build, but do not push or publish
+        type: boolean
+        default: false
+      base:
+        description: Branch to merge into (for testing; scheduled runs use main)
+        type: string
+        default: main
 
 concurrency:
   group: sync-upstream
@@ -32,7 +42,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ inputs.base || 'main' }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -81,9 +91,39 @@ jobs:
         if: steps.upstream.outputs.new == 'true'
         run: bun install --frozen-lockfile
 
-      - name: Verify
+      # Upstream main does not always pass its own test suite. Compare against
+      # the clean upstream release instead: the merge must not add a failure.
+      - name: Test against the upstream baseline
         if: steps.upstream.outputs.new == 'true'
-        run: bun run verify
+        run: |
+          set -uo pipefail
+          failing() {
+            bun test > "$1" 2>&1 || true
+            if ! grep -qE '^Ran [0-9]+ tests' "$1"; then
+              echo "The test run did not finish: $1" >&2
+              tail -n 20 "$1" >&2
+              return 1
+            fi
+            grep -E '^\(fail\) ' "$1" | sed -E 's/ \[[0-9.]+m?s\]$//' | sort -u
+          }
+          failing "$RUNNER_TEMP/merged.log" > "$RUNNER_TEMP/merged-fail.txt" || exit 1
+          git worktree add --quiet "$RUNNER_TEMP/upstream" "refs/tags/${{ steps.upstream.outputs.tag }}"
+          (
+            cd "$RUNNER_TEMP/upstream"
+            bun install --frozen-lockfile > /dev/null
+            failing "$RUNNER_TEMP/upstream.log" > "$RUNNER_TEMP/upstream-fail.txt"
+          ) || exit 1
+          added="$(comm -23 "$RUNNER_TEMP/merged-fail.txt" "$RUNNER_TEMP/upstream-fail.txt")"
+          if [ -n "$added" ]; then
+            echo "The merge adds test failures:"
+            echo "$added"
+            exit 1
+          fi
+          echo "No new test failures. Upstream baseline failures: $(wc -l < "$RUNNER_TEMP/upstream-fail.txt")"
+
+      - name: Lint
+        if: steps.upstream.outputs.new == 'true'
+        run: bun run lint
 
       - name: Build all-in-one HTML
         if: steps.upstream.outputs.new == 'true'
@@ -92,7 +132,7 @@ jobs:
           VERSION: ${{ steps.upstream.outputs.release }}
 
       - name: Push main and the release tag
-        if: steps.upstream.outputs.new == 'true'
+        if: steps.upstream.outputs.new == 'true' && !inputs.dry_run
         run: |
           set -euo pipefail
           release='${{ steps.upstream.outputs.release }}'
@@ -101,7 +141,7 @@ jobs:
           git push origin "refs/tags/${release}"
 
       - name: Publish the release
-        if: steps.upstream.outputs.new == 'true'
+        if: steps.upstream.outputs.new == 'true' && !inputs.dry_run
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
