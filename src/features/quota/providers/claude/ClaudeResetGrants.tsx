@@ -111,6 +111,8 @@ export function useClaudeResetGrants(
     });
   };
   return {
+    /** The last successful read; null while loading, after a read error, or when disabled. */
+    status,
     count: status?.grants.reduce((sum, grant) => sum + grant.resetsLeft, 0) ?? null,
     busy,
     blocked,

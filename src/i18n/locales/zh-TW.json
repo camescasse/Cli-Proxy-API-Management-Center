@@ -1620,7 +1620,20 @@
     "ledger_not_loaded": "未載入",
     "ledger_no_windows": "暫無額度資料",
     "ledger_show": "展開",
-    "ledger_hide": "收起"
+    "ledger_hide": "收起",
+    "resets_title": "已儲備的重置",
+    "resets_item": "重置",
+    "resets_count_other": "{{count}} 次重置",
+    "resets_expires": "{{relative}}過期",
+    "resets_uses": "剩餘次數：{{left}}/{{total}}",
+    "resets_clears": "清除：{{windows}}",
+    "resets_expires_at": "過期時間 {{date}}",
+    "resets_no_expiry": "無過期時間",
+    "resets_paused": "已暫停",
+    "window_five_hour": "5 小時限額",
+    "window_seven_day": "7 天限額",
+    "window_seven_day_overage": "7 天限額（含超額）",
+    "window_all": "全部用量限額"
   },
   "plugin_management": {
     "title": "插件管理",

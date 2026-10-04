@@ -1594,7 +1594,20 @@
     "ledger_not_loaded": "未加载",
     "ledger_no_windows": "暂无额度数据",
     "ledger_show": "展开",
-    "ledger_hide": "收起"
+    "ledger_hide": "收起",
+    "resets_title": "已储备的重置",
+    "resets_item": "重置",
+    "resets_count_other": "{{count}} 次重置",
+    "resets_expires": "{{relative}}过期",
+    "resets_uses": "剩余次数：{{left}}/{{total}}",
+    "resets_clears": "清除：{{windows}}",
+    "resets_expires_at": "过期时间 {{date}}",
+    "resets_no_expiry": "无过期时间",
+    "resets_paused": "已暂停",
+    "window_five_hour": "5 小时限额",
+    "window_seven_day": "7 天限额",
+    "window_seven_day_overage": "7 天限额（含超额）",
+    "window_all": "全部用量限额"
   },
   "plugin_management": {
     "title": "插件管理",

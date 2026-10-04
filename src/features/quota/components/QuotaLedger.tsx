@@ -32,6 +32,8 @@ import { isQuotaRefreshDisabled, type QuotaFileEntry } from '../logic';
 import { QUOTA_ADAPTERS, type QuotaCardState } from '../providers';
 import type { QuotaProviderType } from '../providers/types';
 import { resolveCodexPlanLabel } from '../providers/codex/data';
+import { useClaudeResetGrants } from '../providers/claude/ClaudeResetGrants';
+import { claudeBankedResets, codexBankedResets } from '../quotaResetsModel';
 import {
   buildLedgerWindows,
   orderLedgerWindows,
@@ -41,6 +43,7 @@ import {
   type LedgerWindowTotal,
 } from '../quotaLedgerModel';
 import { QUOTA_PROGRESS_HIGH_THRESHOLD, QUOTA_PROGRESS_MEDIUM_THRESHOLD } from './QuotaMeter';
+import { LedgerResets } from './LedgerResets';
 import styles from './QuotaLedger.module.scss';
 
 export type QuotaLedgerProps = {
@@ -276,6 +279,20 @@ function LedgerRow({
     [entry.type, quota, headlineId]
   );
   const plan = resolvePlanLabel(entry.type, quota, t);
+  // Same read the card view makes; it runs only for loaded Claude rows.
+  const claudeGrants = useClaudeResetGrants(
+    entry.file,
+    entry.type === 'claude' && status !== 'idle',
+    !canRefresh || loading,
+    quota,
+    onRefresh
+  );
+  const resets =
+    entry.type === 'claude'
+      ? claudeBankedResets(claudeGrants.status, now)
+      : entry.type === 'codex'
+        ? codexBankedResets(quota as Parameters<typeof codexBankedResets>[0], now)
+        : [];
 
   let body;
   if (status === 'idle') {
@@ -325,6 +342,7 @@ function LedgerRow({
           {displayName}
         </span>
         {plan && <span className={styles.plan}>{plan}</span>}
+        <LedgerResets resets={resets} now={now} locale={locale} />
       </div>
       <div className={styles.cells}>{body}</div>
       {status !== 'idle' && (

@@ -1,0 +1,162 @@
+@use '../../../styles/mixins' as *;
+
+/* ============================================================
+ * Banked-resets chip + detail panel for ledger rows.
+ * Quiet by default; the expiry turns amber within three days.
+ * ============================================================ */
+
+.root {
+  position: relative;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-full;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
+
+  &:hover,
+  &[aria-expanded='true'] {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+.count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.expiry {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-tertiary);
+
+  &::before {
+    content: '·';
+    margin-right: 5px;
+    color: var(--text-quaternary);
+  }
+}
+
+.expirySoon {
+  color: var(--quota-medium-color);
+}
+
+/* ---------- Detail panel ---------- */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  min-width: 240px;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--floating-surface, var(--bg-primary));
+  box-shadow: var(--floating-shadow);
+}
+
+.panelTitle {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-color);
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.itemHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.itemName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.itemUses {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.itemLine {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.itemRelative {
+  color: var(--text-tertiary);
+
+  &::before {
+    content: '·';
+    margin: 0 5px;
+    color: var(--text-quaternary);
+  }
+}
+
+.paused {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: $radius-full;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip {
+    transition: none;
+  }
+}
