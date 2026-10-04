@@ -2,22 +2,23 @@
  * Banked resets: one shape for every provider's spendable quota resets.
  *
  * Claude reports reset grants (several uses each, clearing named windows);
- * Codex reports manual reset credits (one use each). The ledger shows both
- * with the same words, so the provider differences end here.
+ * Codex reports manual reset credits (one use each). Each use becomes one
+ * entry here, so the ledger shows both providers with the same words.
  */
 
-import type {
-  AnthropicResetGrantStatus,
-  AnthropicResetWindow,
+import {
+  anthropicResetGrantBlocker,
+  type AnthropicResetGrantStatus,
+  type AnthropicResetWindow,
 } from '@/services/api/claudeResetGrants';
+import { selectResetGrant } from './providers/claude/selectResetGrant';
 
 /** Which limits a reset clears. 'all' = the provider does not name them. */
 export type BankedResetScope = AnthropicResetWindow | 'all';
 
+/** One spendable reset (one use). */
 export interface BankedReset {
   id: string;
-  usesLeft: number;
-  usesTotal: number;
   clears: BankedResetScope[];
   /** Expiry instant in epoch ms; null when the provider states none. */
   expiresAtMs: number | null;
@@ -25,8 +26,8 @@ export interface BankedReset {
 }
 
 export interface BankedResetSummary {
-  uses: number;
-  /** Soonest upcoming expiry among resets with uses left. */
+  count: number;
+  /** Soonest upcoming expiry. */
   nextExpiryMs: number | null;
 }
 
@@ -39,7 +40,7 @@ const parseMs = (value: string | null | undefined): number | null => {
 const notExpired = (reset: BankedReset, now: number) =>
   reset.expiresAtMs === null || reset.expiresAtMs > now;
 
-/** Claude reset grants with uses left, soonest expiry first. */
+/** Claude reset grants as one entry per use left, soonest expiry first. */
 export function claudeBankedResets(
   status: AnthropicResetGrantStatus | null,
   now: number
@@ -47,17 +48,44 @@ export function claudeBankedResets(
   if (!status) return [];
   return sortByExpiry(
     status.grants
-      .filter((grant) => grant.resetsLeft > 0)
-      .map((grant): BankedReset => ({
-        id: grant.id,
-        usesLeft: grant.resetsLeft,
-        usesTotal: grant.resetsTotal,
-        clears: grant.clears.length > 0 ? [...grant.clears] : ['all'],
-        expiresAtMs: parseMs(grant.endsAt),
-        paused: grant.paused,
-      }))
+      .flatMap((grant) =>
+        Array.from(
+          { length: Math.max(0, grant.resetsLeft) },
+          (_, use): BankedReset => ({
+            id: `${grant.id}:${use}`,
+            clears: grant.clears.length > 0 ? [...grant.clears] : ['all'],
+            expiresAtMs: parseMs(grant.endsAt),
+            paused: grant.paused,
+          })
+        )
+      )
       .filter((reset) => notExpired(reset, now))
   );
+}
+
+/** Why no Claude reset can be spent now; null when one can. */
+export type ClaudeResetBlocker =
+  | 'cooldown'
+  | 'not_limited'
+  | 'paused'
+  | 'ineligible'
+  | 'not_usable';
+
+export function claudeResetBlocker(
+  status: AnthropicResetGrantStatus | null,
+  now: number
+): ClaudeResetBlocker | null {
+  if (!status) return null;
+  if (status.cooldownUntil && Date.parse(status.cooldownUntil) > now) return 'cooldown';
+  if (selectResetGrant(status, now)) return null;
+  const candidate = status.grants.find(
+    (grant) => grant.resetsLeft > 0 && (!grant.endsAt || Date.parse(grant.endsAt) > now)
+  );
+  if (!candidate) return 'not_usable';
+  const reason = anthropicResetGrantBlocker(status, candidate.id);
+  return reason === 'not_limited' || reason === 'paused' || reason === 'ineligible'
+    ? reason
+    : 'not_usable';
 }
 
 interface CodexResetsLike {
@@ -71,14 +99,14 @@ export function codexBankedResets(quota: CodexResetsLike | undefined, now: numbe
   return sortByExpiry(
     (quota.rateLimitResetCredits ?? [])
       .filter((credit) => credit.status === 'available')
-      .map((credit, index): BankedReset => ({
-        id: credit.id || `credit-${index}`,
-        usesLeft: 1,
-        usesTotal: 1,
-        clears: ['all'],
-        expiresAtMs: parseMs(credit.expiresAt),
-        paused: false,
-      }))
+      .map(
+        (credit, index): BankedReset => ({
+          id: credit.id || `credit-${index}`,
+          clears: ['all'],
+          expiresAtMs: parseMs(credit.expiresAt),
+          paused: false,
+        })
+      )
       .filter((reset) => notExpired(reset, now))
   );
 }
@@ -93,16 +121,14 @@ function sortByExpiry(resets: BankedReset[]): BankedReset[] {
 }
 
 export function summarizeBankedResets(resets: readonly BankedReset[]): BankedResetSummary {
-  let uses = 0;
   let nextExpiryMs: number | null = null;
   for (const reset of resets) {
-    uses += reset.usesLeft;
     if (reset.expiresAtMs !== null) {
       nextExpiryMs =
         nextExpiryMs === null ? reset.expiresAtMs : Math.min(nextExpiryMs, reset.expiresAtMs);
     }
   }
-  return { uses, nextExpiryMs };
+  return { count: resets.length, nextExpiryMs };
 }
 
 /** Expiry this close counts as soon, so the badge can draw attention to it. */

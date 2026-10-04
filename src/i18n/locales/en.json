@@ -1598,12 +1598,10 @@
     "ledger_no_windows": "No quota data available",
     "ledger_show": "Show",
     "ledger_hide": "Hide",
-    "resets_title": "Banked resets",
-    "resets_item": "Reset",
+    "resets_title": "Resets",
     "resets_count_one": "{{count}} reset",
     "resets_count_other": "{{count}} resets",
     "resets_expires": "expires {{relative}}",
-    "resets_uses": "Uses left: {{left}}/{{total}}",
     "resets_clears": "Clears: {{windows}}",
     "resets_expires_at": "Expires {{date}}",
     "resets_no_expiry": "No expiry date",
@@ -1611,7 +1609,13 @@
     "window_five_hour": "5-hour limit",
     "window_seven_day": "7-day limit",
     "window_seven_day_overage": "7-day limit with overage",
-    "window_all": "All usage limits"
+    "window_all": "All usage limits",
+    "resets_use": "Use a reset",
+    "resets_blocked_not_limited": "Usable when a limit is reached.",
+    "resets_blocked_cooldown": "Cooldown is active.",
+    "resets_blocked_paused": "Resets are paused.",
+    "resets_blocked_ineligible": "This account is not eligible.",
+    "resets_blocked_not_usable": "Not usable now."
   },
   "plugin_management": {
     "title": "Plugin Management",

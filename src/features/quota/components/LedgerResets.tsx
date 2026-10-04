@@ -1,12 +1,13 @@
 /**
- * Banked-resets badge for a ledger row: a compact chip (uses left + next
- * expiry) that opens a small panel listing each reset. Read-only; spending a
- * reset stays in the card view. Every provider uses the same words here.
+ * Resets badge for a ledger row: a compact chip (resets left + next expiry)
+ * that opens a small panel listing each reset and offering to use one.
+ * Every provider uses the same words here. The provider decides which reset
+ * a use spends, so the panel has one action rather than one per entry.
  */
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconTimer } from '@/components/ui/icons';
+import { IconRefreshCw, IconTimer } from '@/components/ui/icons';
 import { formatInstantShort, formatRelativeInstant } from '@/utils/quota';
 import {
   RESET_EXPIRY_SOON_MS,
@@ -23,13 +24,24 @@ const SCOPE_KEYS: Record<BankedResetScope, string> = {
   all: 'quota_management.window_all',
 };
 
+export type LedgerResetAction = {
+  label: string;
+  disabled: boolean;
+  busy: boolean;
+  /** Why the action is unavailable, or the outcome of the last attempt. */
+  hint?: string | null;
+  /** Opens the provider's confirmation; nothing is spent without it. */
+  onUse: () => void;
+};
+
 export type LedgerResetsProps = {
   resets: BankedReset[];
   now: number;
   locale?: string;
+  action?: LedgerResetAction;
 };
 
-export function LedgerResets({ resets, now, locale }: LedgerResetsProps) {
+export function LedgerResets({ resets, now, locale, action }: LedgerResetsProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -54,9 +66,9 @@ export function LedgerResets({ resets, now, locale }: LedgerResetsProps) {
     };
   }, [open]);
 
-  const { uses, nextExpiryMs } = summarizeBankedResets(resets);
-  if (uses === 0) return null;
-  const soon = nextExpiryMs !== null && nextExpiryMs - now <= RESET_EXPIRY_SOON_MS;
+  const { count, nextExpiryMs } = summarizeBankedResets(resets);
+  if (count === 0) return null;
+  const isSoon = (ms: number) => ms - now <= RESET_EXPIRY_SOON_MS;
   const title = t('quota_management.resets_title');
 
   return (
@@ -71,9 +83,11 @@ export function LedgerResets({ resets, now, locale }: LedgerResetsProps) {
         onClick={() => setOpen((value) => !value)}
       >
         <IconTimer size={11} aria-hidden="true" />
-        <span className={styles.count}>{t('quota_management.resets_count', { count: uses })}</span>
+        <span className={styles.count}>{t('quota_management.resets_count', { count })}</span>
         {nextExpiryMs !== null && (
-          <span className={soon ? `${styles.expiry} ${styles.expirySoon}` : styles.expiry}>
+          <span
+            className={isSoon(nextExpiryMs) ? `${styles.expiry} ${styles.soon}` : styles.expiry}
+          >
             {t('quota_management.resets_expires', {
               relative: formatRelativeInstant(nextExpiryMs, now, locale),
             })}
@@ -87,21 +101,7 @@ export function LedgerResets({ resets, now, locale }: LedgerResetsProps) {
           <ul className={styles.list}>
             {resets.map((reset) => (
               <li key={reset.id} className={styles.item}>
-                <div className={styles.itemHead}>
-                  <span className={styles.itemName}>{t('quota_management.resets_item')}</span>
-                  <span className={styles.itemUses}>
-                    {t('quota_management.resets_uses', {
-                      left: reset.usesLeft,
-                      total: reset.usesTotal,
-                    })}
-                  </span>
-                </div>
-                <div className={styles.itemLine}>
-                  {t('quota_management.resets_clears', {
-                    windows: reset.clears.map((scope) => t(SCOPE_KEYS[scope])).join(', '),
-                  })}
-                </div>
-                <div className={styles.itemLine}>
+                <div className={styles.itemExpiry}>
                   {reset.expiresAtMs === null ? (
                     t('quota_management.resets_no_expiry')
                   ) : (
@@ -111,8 +111,8 @@ export function LedgerResets({ resets, now, locale }: LedgerResetsProps) {
                       })}
                       <span
                         className={
-                          reset.expiresAtMs - now <= RESET_EXPIRY_SOON_MS
-                            ? `${styles.itemRelative} ${styles.expirySoon}`
+                          isSoon(reset.expiresAtMs)
+                            ? `${styles.itemRelative} ${styles.soon}`
                             : styles.itemRelative
                         }
                       >
@@ -120,13 +120,39 @@ export function LedgerResets({ resets, now, locale }: LedgerResetsProps) {
                       </span>
                     </>
                   )}
+                  {reset.paused && (
+                    <span className={styles.paused}>{t('quota_management.resets_paused')}</span>
+                  )}
                 </div>
-                {reset.paused && (
-                  <span className={styles.paused}>{t('quota_management.resets_paused')}</span>
-                )}
+                <div className={styles.itemClears}>
+                  {t('quota_management.resets_clears', {
+                    windows: reset.clears.map((scope) => t(SCOPE_KEYS[scope])).join(', '),
+                  })}
+                </div>
               </li>
             ))}
           </ul>
+          {action && (
+            <div className={styles.footer}>
+              {action.hint && <span className={styles.hint}>{action.hint}</span>}
+              <button
+                type="button"
+                className={styles.useButton}
+                disabled={action.disabled}
+                onClick={() => {
+                  setOpen(false);
+                  action.onUse();
+                }}
+              >
+                <IconRefreshCw
+                  size={12}
+                  aria-hidden="true"
+                  className={action.busy ? styles.spinning : undefined}
+                />
+                {action.label}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -33,7 +33,7 @@ import { QUOTA_ADAPTERS, type QuotaCardState } from '../providers';
 import type { QuotaProviderType } from '../providers/types';
 import { resolveCodexPlanLabel } from '../providers/codex/data';
 import { useClaudeResetGrants } from '../providers/claude/ClaudeResetGrants';
-import { claudeBankedResets, codexBankedResets } from '../quotaResetsModel';
+import { claudeBankedResets, claudeResetBlocker, codexBankedResets } from '../quotaResetsModel';
 import {
   buildLedgerWindows,
   orderLedgerWindows,
@@ -43,7 +43,7 @@ import {
   type LedgerWindowTotal,
 } from '../quotaLedgerModel';
 import { QUOTA_PROGRESS_HIGH_THRESHOLD, QUOTA_PROGRESS_MEDIUM_THRESHOLD } from './QuotaMeter';
-import { LedgerResets } from './LedgerResets';
+import { LedgerResets, type LedgerResetAction } from './LedgerResets';
 import styles from './QuotaLedger.module.scss';
 
 export type QuotaLedgerProps = {
@@ -58,6 +58,10 @@ export type QuotaLedgerProps = {
   resolvedTheme: ResolvedTheme;
   canRefresh: (entry: QuotaFileEntry) => boolean;
   onRefresh: (entry: QuotaFileEntry) => void;
+  /** Spends one provider reset (Codex) after the provider's confirmation. */
+  onReset: (entry: QuotaFileEntry) => void;
+  /** Cache key of the credential whose reset is in progress. */
+  resettingKey: string | null;
 };
 
 const levelClass = (remaining: number | null) => {
@@ -257,6 +261,8 @@ function LedgerRow({
   fileTitle,
   canRefresh,
   onRefresh,
+  onReset,
+  resetting,
   now,
   locale,
 }: {
@@ -267,6 +273,8 @@ function LedgerRow({
   fileTitle: string;
   canRefresh: boolean;
   onRefresh: () => void;
+  onReset: () => void;
+  resetting: boolean;
   now: number;
   locale?: string;
 }) {
@@ -283,7 +291,7 @@ function LedgerRow({
   const claudeGrants = useClaudeResetGrants(
     entry.file,
     entry.type === 'claude' && status !== 'idle',
-    !canRefresh || loading,
+    !canRefresh || loading || resetting,
     quota,
     onRefresh
   );
@@ -293,6 +301,36 @@ function LedgerRow({
       : entry.type === 'codex'
         ? codexBankedResets(quota as Parameters<typeof codexBankedResets>[0], now)
         : [];
+
+  // One action per account: the provider decides which reset a use spends.
+  let resetAction: LedgerResetAction | undefined;
+  if (entry.type === 'claude') {
+    const blocker = claudeResetBlocker(claudeGrants.status, now);
+    const retry = claudeGrants.buttonLabel === 'retry';
+    resetAction = {
+      label: retry ? t('claude_reset.retry') : t('quota_management.resets_use'),
+      disabled: claudeGrants.blocked,
+      busy: claudeGrants.busy,
+      hint: claudeGrants.message
+        ? t(`claude_reset.${claudeGrants.message}`)
+        : blocker && !retry
+          ? t(`quota_management.resets_blocked_${blocker}`)
+          : null,
+      onUse: claudeGrants.confirm,
+    };
+  } else if (entry.type === 'codex') {
+    resetAction = {
+      label: t('quota_management.resets_use'),
+      disabled:
+        !canRefresh ||
+        loading ||
+        resetting ||
+        !quota ||
+        !QUOTA_ADAPTERS.codex.canResetQuota?.(quota),
+      busy: resetting,
+      onUse: onReset,
+    };
+  }
 
   let body;
   if (status === 'idle') {
@@ -342,7 +380,7 @@ function LedgerRow({
           {displayName}
         </span>
         {plan && <span className={styles.plan}>{plan}</span>}
-        <LedgerResets resets={resets} now={now} locale={locale} />
+        <LedgerResets resets={resets} now={now} locale={locale} action={resetAction} />
       </div>
       <div className={styles.cells}>{body}</div>
       {status !== 'idle' && (
@@ -371,6 +409,8 @@ export function QuotaLedger(props: QuotaLedgerProps) {
     resolvedTheme,
     canRefresh,
     onRefresh,
+    onReset,
+    resettingKey,
   } = props;
   const { t, i18n } = useTranslation();
   const now = useNow();
@@ -440,6 +480,8 @@ export function QuotaLedger(props: QuotaLedgerProps) {
                   fileTitle={fileTitleFor(entry)}
                   canRefresh={canRefresh(entry)}
                   onRefresh={() => onRefresh(entry)}
+                  onReset={() => onReset(entry)}
+                  resetting={resettingKey === getQuotaCacheKey(entry.file)}
                   now={now}
                   locale={locale}
                 />

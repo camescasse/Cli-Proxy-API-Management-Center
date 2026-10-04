@@ -479,6 +479,8 @@ export function QuotaPage() {
             resolvedTheme={resolvedTheme}
             canRefresh={(entry) => canUseActions && !entry.file.disabled}
             onRefresh={(entry) => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+            onReset={(entry) => resetQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+            resettingKey={resettingQuotaName}
           />
         ) : (
           <div className={styles.grid}>

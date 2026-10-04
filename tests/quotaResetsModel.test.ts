@@ -1,12 +1,14 @@
 /**
  * Banked resets: Claude reset grants and Codex manual reset credits become
- * one shape, with expired and spent resets dropped and the soonest expiry first.
+ * one entry per use, with expired and spent resets dropped and the soonest
+ * expiry first. Also covers why a Claude reset cannot be used.
  */
 
 import { describe, expect, test } from 'bun:test';
 import type { AnthropicResetGrantStatus } from '@/services/api/claudeResetGrants';
 import {
   claudeBankedResets,
+  claudeResetBlocker,
   codexBankedResets,
   summarizeBankedResets,
 } from '@/features/quota/quotaResetsModel';
@@ -41,28 +43,32 @@ const status = (grants: AnthropicResetGrantStatus['grants']): AnthropicResetGran
 });
 
 describe('claudeBankedResets', () => {
-  test('keeps grants with uses left, drops spent and expired ones, soonest first', () => {
+  test('lists one entry per use left, drops spent and expired grants, soonest first', () => {
     const resets = claudeBankedResets(
       status([
-        grant({ id: 'later', endsAt: iso(NOW + 20 * DAY) }),
+        grant({ id: 'later', resetsLeft: 1, endsAt: iso(NOW + 20 * DAY) }),
         grant({ id: 'spent', resetsLeft: 0 }),
         grant({ id: 'expired', endsAt: iso(NOW - DAY) }),
-        grant({ id: 'sooner', endsAt: iso(NOW + 2 * DAY), paused: true }),
-        grant({ id: 'open-ended', endsAt: null, clears: [] }),
+        grant({ id: 'sooner', resetsLeft: 2, endsAt: iso(NOW + 2 * DAY), paused: true }),
+        grant({ id: 'open-ended', resetsLeft: 1, endsAt: null, clears: [] }),
       ]),
       NOW
     );
 
-    expect(resets.map((reset) => reset.id)).toEqual(['sooner', 'later', 'open-ended']);
-    expect(resets[0]).toMatchObject({
-      usesLeft: 2,
-      usesTotal: 3,
+    expect(resets.map((reset) => reset.id)).toEqual([
+      'sooner:0',
+      'sooner:1',
+      'later:0',
+      'open-ended:0',
+    ]);
+    expect(resets[0]).toEqual({
+      id: 'sooner:0',
       clears: ['five_hour', 'seven_day'],
       expiresAtMs: NOW + 2 * DAY,
       paused: true,
     });
     // A grant that names no window clears whatever the provider decides.
-    expect(resets[2]).toMatchObject({ clears: ['all'], expiresAtMs: null });
+    expect(resets[3]).toMatchObject({ clears: ['all'], expiresAtMs: null });
   });
 
   test('returns nothing before the grants were read', () => {
@@ -70,8 +76,30 @@ describe('claudeBankedResets', () => {
   });
 });
 
+describe('claudeResetBlocker', () => {
+  test('allows a use when a grant is usable and the account is at a limit', () => {
+    expect(claudeResetBlocker({ ...status([grant({})]), atLimit: true }, NOW)).toBeNull();
+  });
+
+  test('explains why no reset can be used', () => {
+    expect(claudeResetBlocker(status([grant({})]), NOW)).toBe('not_limited');
+    expect(
+      claudeResetBlocker(
+        { ...status([grant({})]), atLimit: true, cooldownUntil: iso(NOW + DAY) },
+        NOW
+      )
+    ).toBe('cooldown');
+    expect(claudeResetBlocker({ ...status([grant({ paused: true })]), atLimit: true }, NOW)).toBe(
+      'paused'
+    );
+    expect(claudeResetBlocker({ ...status([grant({})]), eligible: false }, NOW)).toBe('ineligible');
+    expect(claudeResetBlocker(status([grant({ resetsLeft: 0 })]), NOW)).toBe('not_usable');
+    expect(claudeResetBlocker(null, NOW)).toBeNull();
+  });
+});
+
 describe('codexBankedResets', () => {
-  test('keeps available credits as single-use resets for all usage limits', () => {
+  test('keeps available credits as one entry each, for all usage limits', () => {
     const resets = codexBankedResets(
       {
         status: 'success',
@@ -85,9 +113,9 @@ describe('codexBankedResets', () => {
       NOW
     );
 
-    expect(resets.map((reset) => [reset.id, reset.usesLeft, reset.clears])).toEqual([
-      ['a', 1, ['all']],
-      ['b', 1, ['all']],
+    expect(resets.map((reset) => [reset.id, reset.clears])).toEqual([
+      ['a', ['all']],
+      ['b', ['all']],
     ]);
   });
 
@@ -98,7 +126,7 @@ describe('codexBankedResets', () => {
 });
 
 describe('summarizeBankedResets', () => {
-  test('adds up uses and finds the soonest expiry', () => {
+  test('counts the resets and finds the soonest expiry', () => {
     const resets = claudeBankedResets(
       status([
         grant({ id: 'x', resetsLeft: 2, endsAt: iso(NOW + 9 * DAY) }),
@@ -107,7 +135,7 @@ describe('summarizeBankedResets', () => {
       ]),
       NOW
     );
-    expect(summarizeBankedResets(resets)).toEqual({ uses: 4, nextExpiryMs: NOW + 3 * DAY });
-    expect(summarizeBankedResets([])).toEqual({ uses: 0, nextExpiryMs: null });
+    expect(summarizeBankedResets(resets)).toEqual({ count: 4, nextExpiryMs: NOW + 3 * DAY });
+    expect(summarizeBankedResets([])).toEqual({ count: 0, nextExpiryMs: null });
   });
 });

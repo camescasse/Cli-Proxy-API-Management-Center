@@ -62,7 +62,7 @@
   }
 }
 
-.expirySoon {
+.soon {
   color: var(--quota-medium-color);
 }
 
@@ -101,38 +101,24 @@
 .item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 8px 0;
+  gap: 2px;
+  padding: 7px 0;
   border-top: 1px solid var(--border-color);
-
-  &:last-child {
-    padding-bottom: 0;
-  }
 }
 
-.itemHead {
+.itemExpiry {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.itemName {
+  gap: 0 6px;
   font-size: 12px;
-  font-weight: 600;
   color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-.itemUses {
+.itemClears {
   font-size: 11px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.itemLine {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
 }
 
 .itemRelative {
@@ -140,14 +126,12 @@
 
   &::before {
     content: '·';
-    margin: 0 5px;
+    margin-right: 6px;
     color: var(--text-quaternary);
   }
 }
 
 .paused {
-  align-self: flex-start;
-  margin-top: 2px;
   padding: 1px 6px;
   border-radius: $radius-full;
   background: var(--bg-hover);
@@ -155,8 +139,76 @@
   font-size: 10.5px;
 }
 
+/* ---------- Footer: use a reset ---------- */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+}
+
+.useButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: $radius-full;
+  background: var(--text-primary);
+  color: var(--bg-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  &:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
+.spinning {
+  animation: resets-spin 0.8s linear infinite;
+}
+
+@keyframes resets-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .chip {
+  .chip,
+  .useButton {
     transition: none;
+  }
+
+  .spinning {
+    animation: none;
   }
 }
