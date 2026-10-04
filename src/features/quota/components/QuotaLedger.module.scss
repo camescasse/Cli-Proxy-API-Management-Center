@@ -1,0 +1,510 @@
+@use '../../../styles/mixins' as *;
+
+/* ============================================================
+ * Ledger view — provider summary strip + per-provider credential rows.
+ * Telemetry (names, percentages, instants) is mono + tabular-nums,
+ * like the quota cards.
+ * ============================================================ */
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  min-width: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- Provider glyph ---------- */
+
+.glyph {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.glyphImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.glyphFallback {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* ---------- Summary strip ----------
+ * One bordered panel; cells share hairline dividers. The negative margins
+ * hide each cell's leading border on the panel edge, so wrapping onto a new
+ * line never draws a double or dangling rule. */
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  overflow: hidden;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: -1px 0 0 -1px;
+  padding: 16px 18px 14px;
+  border-top: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-color);
+}
+
+.summaryHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.summaryName {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.summaryCount {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.summaryLabel {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summaryFigure {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.summaryValue {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryOf {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One segment per credential; each fills to that credential's remaining share. */
+.segments {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.segment {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: $radius-full;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  overflow: hidden;
+}
+
+.segmentFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.summaryReset {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 9px;
+  font-size: 11.5px;
+}
+
+.summaryFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid var(--border-color);
+}
+
+.summaryOther {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 100%;
+  min-width: 0;
+  font-size: 11.5px;
+}
+
+.summaryOtherLabel {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summaryOtherValue {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryToggle {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+}
+
+/* The first "other" line shares its row with the toggle, as in the summary
+ * footer design; later lines take the full width when expanded. */
+.summaryFoot > .summaryOther:first-child {
+  flex: 1 1 auto;
+}
+
+/* ---------- Reset line (summary + cells) ---------- */
+
+.resetRelative {
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.resetAbsolute {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  &::before {
+    content: '·';
+    margin-right: 6px;
+    color: var(--text-quaternary);
+  }
+}
+
+.resetNone {
+  color: var(--text-tertiary);
+}
+
+/* ---------- Fill levels (same thresholds and colors as QuotaMeter) ---------- */
+
+.fillHigh {
+  background: var(--viz-success);
+}
+
+.fillMedium {
+  background: var(--quota-medium-color);
+}
+
+.fillLow {
+  background: var(--viz-failure);
+}
+
+/* ---------- Provider groups ---------- */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.groupTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.groupCount {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 28px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fileName {
+  font-family: $font-mono;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 26px;
+  min-width: 0;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 158px;
+  min-width: 0;
+}
+
+.cellHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cellLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cellValue {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  height: 5px;
+  border-radius: $radius-full;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  overflow: hidden;
+}
+
+.trackFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
+}
+
+.cellReset {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.cellsLoading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 26px;
+}
+
+.cellSkeleton {
+  width: 158px;
+  height: 46px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  animation: ledger-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ledger-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.loadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: $font-mono;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
+.rowError {
+  font-size: 12px;
+  color: var(--error-color);
+}
+
+.rowMessage {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.rowAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+}
+
+.spinning {
+  animation: ledger-spin 0.8s linear infinite;
+}
+
+@keyframes ledger-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Narrow layouts ---------- */
+
+@media (max-width: 900px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .identity {
+    grid-column: 1 / 2;
+  }
+
+  .cells {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .rowAction {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@include mobile {
+  .cell,
+  .cellSkeleton {
+    width: calc(50% - 13px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trackFill {
+    transition: none;
+  }
+
+  .cellSkeleton,
+  .spinning {
+    animation: none;
+  }
+}

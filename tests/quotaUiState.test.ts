@@ -68,6 +68,18 @@ describe('quota ui state', () => {
     expect(readQuotaUiState()).toEqual({ tab: undefined, sortMode: undefined });
   });
 
+  test('round-trips the view and email visibility', () => {
+    writeQuotaUiState({ view: 'cards', showEmails: true });
+    writeQuotaUiState({ tab: 'claude' });
+
+    expect(readQuotaUiState()).toEqual({ tab: 'claude', view: 'cards', showEmails: true });
+  });
+
+  test('drops an unknown view and a non-boolean email flag', () => {
+    storage.setItem(KEY, JSON.stringify({ view: 'spreadsheet', showEmails: 'yes' }));
+    expect(readQuotaUiState()).toEqual({ view: undefined, showEmails: undefined });
+  });
+
   test('survives absent, malformed, and non-object payloads', () => {
     expect(readQuotaUiState()).toBeNull();
 

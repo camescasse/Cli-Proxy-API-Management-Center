@@ -32,6 +32,8 @@ const quotaClasses = bindQuotaClasses(bodyStyles, 'QuotaBody.module.scss');
 export type QuotaCardProps = {
   entry: QuotaFileEntry;
   quota?: QuotaCardState;
+  /** Overrides the file name shown in the header (for example, with emails masked). */
+  displayName?: string;
   resolvedTheme: ResolvedTheme;
   canRefresh: boolean;
   resetting: boolean;
@@ -45,6 +47,7 @@ export function QuotaCard(props: QuotaCardProps) {
   const {
     entry,
     quota,
+    displayName: displayNameOverride,
     resolvedTheme,
     canRefresh,
     resetting,
@@ -55,7 +58,7 @@ export function QuotaCard(props: QuotaCardProps) {
   const { t } = useTranslation();
   const adapter = QUOTA_ADAPTERS[entry.type];
   const file = entry.file;
-  const displayName = getQuotaDisplayName(file);
+  const displayName = displayNameOverride ?? getQuotaDisplayName(file);
 
   // 挂载时捕获一次延迟：后续 props 变 null 不影响本卡（React 19 禁渲染期读 ref）
   const [mountEntranceDelayMs] = useState<number | null>(entranceDelayMs ?? null);

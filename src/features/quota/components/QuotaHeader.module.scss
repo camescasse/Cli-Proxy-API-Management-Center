@@ -115,6 +115,34 @@
   }
 }
 
+/* Quiet outlined pill beside the primary action */
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: $radius-full;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  transition:
+    border-color var(--dur-hover, 200ms) var(--ease-out-strong, ease-out),
+    background-color var(--dur-hover, 200ms) var(--ease-out-strong, ease-out);
+
+  &:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .primaryAction:hover:not(:disabled) {
     transform: translateY(-1px);
@@ -145,7 +173,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .primaryAction {
+  .primaryAction,
+  .secondaryAction {
     transition: none;
   }
 

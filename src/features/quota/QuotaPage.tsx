@@ -21,18 +21,21 @@ import { useNow } from '@/hooks/useNow';
 import { useRevealGroup } from '@/hooks/motion';
 import { useAuthStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getQuotaCacheKey } from '@/utils/quota/identity';
+import { getQuotaCacheKey, getQuotaDisplayName } from '@/utils/quota/identity';
 import { ProviderTabs } from '@/features/authFiles/components/ProviderTabs';
 import { QuotaHeader } from './components/QuotaHeader';
 import { QuotaCard } from './components/QuotaCard';
+import { QuotaLedger } from './components/QuotaLedger';
 import { QuotaTimeline } from './components/QuotaTimeline';
 import {
   CARD_ENTRANCE_BUDGET_MS,
   QUOTA_PAGE_SIZE,
   QUOTA_SORT_MODES,
   QUOTA_TAB_ORDER,
+  QUOTA_VIEW_MODES,
   type QuotaSortMode,
   type QuotaTabId,
+  type QuotaViewMode,
 } from './constants';
 import {
   buildTabCounts,
@@ -45,6 +48,7 @@ import {
   type QuotaFileEntry,
 } from './logic';
 import { nextRecoveryMs } from './resetSchedule';
+import { maskEmails } from './quotaLedgerModel';
 import { QUOTA_ADAPTERS, getQuotaSetter, type QuotaCardState } from './providers';
 import type { QuotaProviderType } from './providers/types';
 import { useDevinQuotaAutoLoad } from './providers/devin/useDevinQuotaAutoLoad';
@@ -56,11 +60,8 @@ import styles from './QuotaPage.module.scss';
 const TAB_IDS: string[] = ['all', ...QUOTA_TAB_ORDER];
 const SKELETON_CARD_COUNT = 6;
 
-/**
- * Existing providers display filenames; Devin's card and timeline share an
- * identity-aware display label. Keep the filename fallback stable for memoization.
- */
-const displayNameFor = (name: string) => name;
+/** Display names pass through unchanged when emails are shown; stable for memoization. */
+const showName = (name: string) => name;
 
 export function QuotaPage() {
   const { t } = useTranslation();
@@ -74,6 +75,8 @@ export function QuotaPage() {
   const [sortMode, setSortMode] = useState<QuotaSortMode>(
     () => readQuotaUiState()?.sortMode ?? 'default'
   );
+  const [view, setView] = useState<QuotaViewMode>(() => readQuotaUiState()?.view ?? 'ledger');
+  const [showEmails, setShowEmails] = useState(() => readQuotaUiState()?.showEmails ?? false);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -158,14 +161,20 @@ export function QuotaPage() {
 
   // 只在「最快恢复优先」下订阅分钟时钟。默认序下不门控的话，pageItems 每分钟
   // 换一次身份，会反复空转下面那个「刷新全部」的 loading 下降沿 effect。
-  const tick = useNow(sortMode !== 'default');
-  const sortNow = sortMode === 'default' ? 0 : tick;
+  // The ledger has no search box or sort control: it always lists the whole
+  // tab in provider order, so a search typed in the card view must not linger.
+  const ledgerView = view === 'ledger';
+  const effectiveSortMode: QuotaSortMode = ledgerView ? 'default' : sortMode;
+  const effectiveSearch = ledgerView ? '' : search;
+  const tick = useNow(effectiveSortMode !== 'default');
+  const sortNow = effectiveSortMode === 'default' ? 0 : tick;
 
   const entries = useMemo(() => classifyQuotaFiles(files), [files]);
   const tabCounts = useMemo(() => buildTabCounts(entries), [entries]);
+  const tabEntries = useMemo(() => filterEntriesByTab(entries, tab), [entries, tab]);
   const filteredEntries = useMemo(
-    () => filterEntriesBySearch(filterEntriesByTab(entries, tab), search),
-    [entries, tab, search]
+    () => filterEntriesBySearch(tabEntries, effectiveSearch),
+    [tabEntries, effectiveSearch]
   );
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
@@ -178,8 +187,8 @@ export function QuotaPage() {
   );
   // 排序在分页之前：否则「最快恢复」只在当前页内成立。
   const sortedEntries = useMemo(
-    () => sortQuotaEntries(filteredEntries, sortMode, resolveNextRecovery),
-    [filteredEntries, sortMode, resolveNextRecovery]
+    () => sortQuotaEntries(filteredEntries, effectiveSortMode, resolveNextRecovery),
+    [filteredEntries, effectiveSortMode, resolveNextRecovery]
   );
 
   const { pageItems, currentPage, totalPages } = useMemo(
@@ -198,6 +207,31 @@ export function QuotaPage() {
     setPage(1);
     writeQuotaUiState({ sortMode: next as QuotaSortMode });
   }, []);
+
+  const handleViewChange = useCallback((next: string) => {
+    setView(next as QuotaViewMode);
+    setPage(1);
+    writeQuotaUiState({ view: next as QuotaViewMode });
+  }, []);
+
+  const handleToggleEmails = useCallback(() => {
+    setShowEmails((current) => {
+      writeQuotaUiState({ showEmails: !current });
+      return !current;
+    });
+  }, []);
+
+  const displayNameFor = showEmails ? showName : maskEmails;
+  const entryDisplayName = useCallback(
+    (entry: QuotaFileEntry) => displayNameFor(getQuotaDisplayName(entry.file)),
+    [displayNameFor]
+  );
+
+  const viewOptions = useMemo(
+    () =>
+      QUOTA_VIEW_MODES.map((mode) => ({ value: mode, label: t(`quota_management.view_${mode}`) })),
+    [t]
+  );
 
   const sortOptions = useMemo(
     () =>
@@ -321,6 +355,8 @@ export function QuotaPage() {
         refreshing={loading || batchLoading}
         disableControls={disableControls}
         onRefreshAll={handleRefreshAll}
+        showEmails={showEmails}
+        onToggleEmails={handleToggleEmails}
       />
 
       <section className={styles.workbench}>
@@ -333,45 +369,56 @@ export function QuotaPage() {
             resolvedTheme={resolvedTheme}
             onChange={handleTabChange}
           />
-        </div>
-
-        <div className={styles.toolbar}>
-          <div className={styles.search}>
-            <IconSearch size={16} className={styles.searchIcon} aria-hidden="true" />
-            <input
-              ref={searchInputRef}
-              className={styles.searchInput}
-              type="search"
-              value={search}
-              onChange={(event) => handleSearchChange(event.target.value)}
-              placeholder={t('quota_management.search_placeholder')}
-              aria-label={t('quota_management.search_label')}
-            />
-            {search && (
-              <button
-                type="button"
-                className={styles.clearSearch}
-                aria-label={t('quota_management.search_clear')}
-                title={t('quota_management.search_clear')}
-                onClick={() => {
-                  handleSearchChange('');
-                  searchInputRef.current?.focus();
-                }}
-              >
-                <IconX size={14} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-          <div className={styles.sort}>
+          <div className={styles.view}>
             <Select
-              value={sortMode}
-              options={sortOptions}
-              onChange={handleSortModeChange}
-              ariaLabel={t('quota_management.sort_label')}
+              value={view}
+              options={viewOptions}
+              onChange={handleViewChange}
+              ariaLabel={t('quota_management.view_label')}
               size="sm"
             />
           </div>
         </div>
+
+        {!ledgerView && (
+          <div className={styles.toolbar}>
+            <div className={styles.search}>
+              <IconSearch size={16} className={styles.searchIcon} aria-hidden="true" />
+              <input
+                ref={searchInputRef}
+                className={styles.searchInput}
+                type="search"
+                value={search}
+                onChange={(event) => handleSearchChange(event.target.value)}
+                placeholder={t('quota_management.search_placeholder')}
+                aria-label={t('quota_management.search_label')}
+              />
+              {search && (
+                <button
+                  type="button"
+                  className={styles.clearSearch}
+                  aria-label={t('quota_management.search_clear')}
+                  title={t('quota_management.search_clear')}
+                  onClick={() => {
+                    handleSearchChange('');
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <IconX size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <div className={styles.sort}>
+              <Select
+                value={sortMode}
+                options={sortOptions}
+                onChange={handleSortModeChange}
+                ariaLabel={t('quota_management.sort_label')}
+                size="sm"
+              />
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className={styles.errorBanner} role="alert">
@@ -388,21 +435,21 @@ export function QuotaPage() {
         ) : isEmpty ? (
           <EmptyState
             title={
-              search.trim()
+              effectiveSearch.trim()
                 ? t('quota_management.search_empty_title')
                 : tab === 'all'
                   ? t('quota_management.empty_title')
                   : t(`${QUOTA_ADAPTERS[tab].i18nPrefix}.empty_title`)
             }
             description={
-              search.trim()
+              effectiveSearch.trim()
                 ? t('quota_management.search_empty_desc')
                 : tab === 'all'
                   ? t('quota_management.empty_desc')
                   : t(`${QUOTA_ADAPTERS[tab].i18nPrefix}.empty_desc`)
             }
             action={
-              search.trim() ? (
+              effectiveSearch.trim() ? (
                 <Button variant="secondary" size="sm" onClick={() => handleSearchChange('')}>
                   {t('quota_management.search_clear')}
                 </Button>
@@ -413,6 +460,16 @@ export function QuotaPage() {
               )
             }
           />
+        ) : ledgerView ? (
+          <QuotaLedger
+            entries={tabEntries}
+            rows={pageItems}
+            quotaFor={getQuota}
+            displayNameFor={entryDisplayName}
+            resolvedTheme={resolvedTheme}
+            canRefresh={(entry) => canUseActions && !entry.file.disabled}
+            onRefresh={(entry) => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
+          />
         ) : (
           <div className={styles.grid}>
             {pageItems.map((entry, index) => (
@@ -420,6 +477,7 @@ export function QuotaPage() {
                 key={`${entry.type}:${getQuotaCacheKey(entry.file)}`}
                 entry={entry}
                 quota={getQuota(entry)}
+                displayName={entryDisplayName(entry)}
                 resolvedTheme={resolvedTheme}
                 canRefresh={canUseActions && !entry.file.disabled}
                 resetting={resettingQuotaName === getQuotaCacheKey(entry.file)}
