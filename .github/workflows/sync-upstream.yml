@@ -1,0 +1,117 @@
+name: Sync upstream release
+
+# Daily: when router-for-me publishes a new vX.Y.Z tag, merge it into this
+# fork's main, run the full verification, and publish vX.Y.Z-camescasse.1.
+# CLIProxyAPI (management.panel-github-repository) then downloads it within 3 hours.
+#
+# A tag pushed with GITHUB_TOKEN does not start release.yml, so this workflow
+# builds and publishes the release itself. A merge conflict or a failed check
+# stops the run before anything is pushed or published.
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM_URL: https://github.com/router-for-me/Cli-Proxy-API-Management-Center
+  FORK_SUFFIX: camescasse
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Find a new upstream release
+        id: upstream
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch --quiet upstream --tags
+          latest="$(git ls-remote --tags --refs upstream 'v*' \
+            | sed 's|.*refs/tags/||' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -n 1)"
+          echo "Latest upstream release: ${latest}"
+          if git merge-base --is-ancestor "refs/tags/${latest}" HEAD; then
+            echo "main already contains ${latest}. Nothing to do."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${latest}" >> "$GITHUB_OUTPUT"
+            echo "release=${latest}-${FORK_SUFFIX}.1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge the upstream release
+        if: steps.upstream.outputs.new == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-ff --no-edit -m "Merge upstream ${{ steps.upstream.outputs.tag }}" \
+            "refs/tags/${{ steps.upstream.outputs.tag }}"
+
+      - name: Setup Node.js
+        if: steps.upstream.outputs.new == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup Bun
+        if: steps.upstream.outputs.new == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install dependencies
+        if: steps.upstream.outputs.new == 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Verify
+        if: steps.upstream.outputs.new == 'true'
+        run: bun run verify
+
+      - name: Build all-in-one HTML
+        if: steps.upstream.outputs.new == 'true'
+        run: bun run build
+        env:
+          VERSION: ${{ steps.upstream.outputs.release }}
+
+      - name: Push main and the release tag
+        if: steps.upstream.outputs.new == 'true'
+        run: |
+          set -euo pipefail
+          release='${{ steps.upstream.outputs.release }}'
+          git tag -a "$release" -m "Upstream ${{ steps.upstream.outputs.tag }} with fork changes"
+          git push origin HEAD:main
+          git push origin "refs/tags/${release}"
+
+      - name: Publish the release
+        if: steps.upstream.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release='${{ steps.upstream.outputs.release }}'
+          mv dist/index.html dist/management.html
+          {
+            echo "Upstream ${{ steps.upstream.outputs.tag }} merged with the fork changes."
+            echo
+            git log --pretty=format:'- %h %s' --no-merges "HEAD^1..HEAD^2"
+          } > release-notes.md
+          gh release create "$release" dist/management.html \
+            --title "$release" --notes-file release-notes.md --latest
