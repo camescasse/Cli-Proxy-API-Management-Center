@@ -50,6 +50,8 @@ export type QuotaLedgerProps = {
   rows: QuotaFileEntry[];
   quotaFor: (entry: QuotaFileEntry) => QuotaCardState | undefined;
   displayNameFor: (entry: QuotaFileEntry) => string;
+  /** Hover text for a row's name: the credential's file name. */
+  fileTitleFor: (entry: QuotaFileEntry) => string;
   resolvedTheme: ResolvedTheme;
   canRefresh: (entry: QuotaFileEntry) => boolean;
   onRefresh: (entry: QuotaFileEntry) => void;
@@ -249,6 +251,7 @@ function LedgerRow({
   quota,
   headlineId,
   displayName,
+  fileTitle,
   canRefresh,
   onRefresh,
   now,
@@ -258,6 +261,7 @@ function LedgerRow({
   quota: QuotaCardState | undefined;
   headlineId: string | null;
   displayName: string;
+  fileTitle: string;
   canRefresh: boolean;
   onRefresh: () => void;
   now: number;
@@ -317,7 +321,7 @@ function LedgerRow({
   return (
     <div className={styles.row} role="listitem">
       <div className={styles.identity}>
-        <span className={styles.fileName} title={displayName}>
+        <span className={styles.fileName} title={fileTitle}>
           {displayName}
         </span>
         {plan && <span className={styles.plan}>{plan}</span>}
@@ -340,7 +344,16 @@ function LedgerRow({
 }
 
 export function QuotaLedger(props: QuotaLedgerProps) {
-  const { entries, rows, quotaFor, displayNameFor, resolvedTheme, canRefresh, onRefresh } = props;
+  const {
+    entries,
+    rows,
+    quotaFor,
+    displayNameFor,
+    fileTitleFor,
+    resolvedTheme,
+    canRefresh,
+    onRefresh,
+  } = props;
   const { t, i18n } = useTranslation();
   const now = useNow();
   const locale = i18n.resolvedLanguage;
@@ -406,6 +419,7 @@ export function QuotaLedger(props: QuotaLedgerProps) {
                   quota={quotaFor(entry)}
                   headlineId={headlineByType.get(entry.type) ?? null}
                   displayName={displayNameFor(entry)}
+                  fileTitle={fileTitleFor(entry)}
                   canRefresh={canRefresh(entry)}
                   onRefresh={() => onRefresh(entry)}
                   now={now}

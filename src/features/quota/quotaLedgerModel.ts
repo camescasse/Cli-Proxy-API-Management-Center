@@ -111,7 +111,7 @@ export function buildLedgerWindows(
     return [
       {
         id: 'weekly',
-        label: 'Weekly limit',
+        label: '7-day limit',
         labelKey: 'xai_quota.weekly_limit',
         remaining: remainingFromUsed(billing.usagePercent),
         resetAtMs: finiteOrNull(billing.resetAtMs),

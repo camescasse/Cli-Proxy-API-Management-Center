@@ -3,6 +3,7 @@ import { normalizeAuthFilesResponse } from '@/services/api/authFiles';
 import { useQuotaStore } from '@/stores/useQuotaStore';
 import type { AuthFileItem, DevinQuotaState } from '@/types';
 import {
+  getQuotaAccountLabel,
   getQuotaCacheFileName,
   getQuotaCacheKey,
   getQuotaDisplayName,
@@ -117,5 +118,21 @@ describe('Devin quota identity', () => {
     expect(useQuotaStore.getState().devinQuota[secondKey]).toBeUndefined();
     expect(useQuotaStore.getState().devinQuota[otherKey]).toBe(other);
     expect(useQuotaStore.getState().fileGenerations['shared.json']).toBe(1);
+  });
+});
+
+describe('quota account label', () => {
+  test('names the account by its email, not by the file name', () => {
+    const file = {
+      name: 'claude-4ad90f84-jane.doe@example.com.json',
+      type: 'claude',
+      email: ' jane.doe@example.com ',
+    } as AuthFileItem;
+    expect(getQuotaAccountLabel(file)).toBe('jane.doe@example.com');
+  });
+
+  test('falls back to the display name when the backend sent no email', () => {
+    const file = { name: 'kimi-oauth.json', type: 'kimi', email: '' } as AuthFileItem;
+    expect(getQuotaAccountLabel(file)).toBe('kimi-oauth.json');
   });
 });

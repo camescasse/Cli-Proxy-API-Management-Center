@@ -32,8 +32,10 @@ const quotaClasses = bindQuotaClasses(bodyStyles, 'QuotaBody.module.scss');
 export type QuotaCardProps = {
   entry: QuotaFileEntry;
   quota?: QuotaCardState;
-  /** Overrides the file name shown in the header (for example, with emails masked). */
+  /** Overrides the name shown in the header (for example, the masked account email). */
   displayName?: string;
+  /** Hover text for the header name; defaults to the name itself. */
+  fileTitle?: string;
   resolvedTheme: ResolvedTheme;
   canRefresh: boolean;
   resetting: boolean;
@@ -48,6 +50,7 @@ export function QuotaCard(props: QuotaCardProps) {
     entry,
     quota,
     displayName: displayNameOverride,
+    fileTitle,
     resolvedTheme,
     canRefresh,
     resetting,
@@ -110,7 +113,7 @@ export function QuotaCard(props: QuotaCardProps) {
             <span className={styles.iconFallback}>{typeLabel.slice(0, 1).toUpperCase()}</span>
           )}
         </span>
-        <span className={styles.fileName} title={displayName}>
+        <span className={styles.fileName} title={fileTitle ?? displayName}>
           {displayName}
         </span>
       </header>

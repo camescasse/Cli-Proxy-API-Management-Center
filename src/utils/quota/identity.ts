@@ -22,6 +22,14 @@ export function getQuotaDisplayName(file: AuthFileItem): string {
   return identity ? `${file.name} · ${identity}` : file.name;
 }
 
+/**
+ * The account a credential belongs to, for people rather than file operations:
+ * the backend's email field when present, else the file-based display name.
+ */
+export function getQuotaAccountLabel(file: AuthFileItem): string {
+  return file.email?.trim() || getQuotaDisplayName(file);
+}
+
 /** Resolve a cache identity back to the physical filename used by file mutations. */
 export function getQuotaCacheFileName(key: string): string {
   const separatorIndex = key.indexOf(QUOTA_IDENTITY_SEPARATOR);

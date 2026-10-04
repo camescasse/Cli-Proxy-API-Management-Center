@@ -21,7 +21,11 @@ import { useNow } from '@/hooks/useNow';
 import { useRevealGroup } from '@/hooks/motion';
 import { useAuthStore, useQuotaStore, useThemeStore } from '@/stores';
 import type { AuthFileItem, ResolvedTheme } from '@/types';
-import { getQuotaCacheKey, getQuotaDisplayName } from '@/utils/quota/identity';
+import {
+  getQuotaAccountLabel,
+  getQuotaCacheKey,
+  getQuotaDisplayName,
+} from '@/utils/quota/identity';
 import { ProviderTabs } from '@/features/authFiles/components/ProviderTabs';
 import { QuotaHeader } from './components/QuotaHeader';
 import { QuotaCard } from './components/QuotaCard';
@@ -222,7 +226,12 @@ export function QuotaPage() {
   }, []);
 
   const displayNameFor = showEmails ? showName : maskEmails;
+  // Rows and cards name the account (its email); the file name stays on hover.
   const entryDisplayName = useCallback(
+    (entry: QuotaFileEntry) => displayNameFor(getQuotaAccountLabel(entry.file)),
+    [displayNameFor]
+  );
+  const entryFileTitle = useCallback(
     (entry: QuotaFileEntry) => displayNameFor(getQuotaDisplayName(entry.file)),
     [displayNameFor]
   );
@@ -466,6 +475,7 @@ export function QuotaPage() {
             rows={pageItems}
             quotaFor={getQuota}
             displayNameFor={entryDisplayName}
+            fileTitleFor={entryFileTitle}
             resolvedTheme={resolvedTheme}
             canRefresh={(entry) => canUseActions && !entry.file.disabled}
             onRefresh={(entry) => void refreshQuota(entry.file, QUOTA_ADAPTERS[entry.type])}
@@ -478,6 +488,7 @@ export function QuotaPage() {
                 entry={entry}
                 quota={getQuota(entry)}
                 displayName={entryDisplayName(entry)}
+                fileTitle={entryFileTitle(entry)}
                 resolvedTheme={resolvedTheme}
                 canRefresh={canUseActions && !entry.file.disabled}
                 resetting={resettingQuotaName === getQuotaCacheKey(entry.file)}
