@@ -8,6 +8,11 @@ name: Sync upstream release
 # A tag pushed with GITHUB_TOKEN does not start release.yml, so this workflow
 # builds and publishes the release itself. A merge conflict or a failed check
 # stops the run before anything is pushed or published.
+#
+# The fork edits upstream's locale files, so they merge key by key
+# (.github/scripts/json-merge.mjs) instead of line by line. Upstream's
+# per-locale completeness tests are ignored: the fork translates its strings
+# only into some locales, and the others fall back.
 
 on:
   schedule:
@@ -33,6 +38,8 @@ permissions:
 env:
   UPSTREAM_URL: https://github.com/router-for-me/Cli-Proxy-API-Management-Center
   FORK_SUFFIX: camescasse
+  # Failing tests whose names match this are not counted as added by the merge.
+  IGNORED_TESTS: ' locale > covers every current English key'
 
 jobs:
   sync:
@@ -66,20 +73,24 @@ jobs:
             echo "release=${latest}-${FORK_SUFFIX}.1" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Setup Node.js
+        if: steps.upstream.outputs.new == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Merge the upstream release
         if: steps.upstream.outputs.new == 'true'
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Local-only attributes: no committed .gitattributes that could conflict with upstream.
+          echo 'src/i18n/locales/*.json merge=localejson' >> .git/info/attributes
+          git config merge.localejson.name 'JSON key-by-key merge'
+          git config merge.localejson.driver 'node .github/scripts/json-merge.mjs %O %A %B'
           git merge --no-ff --no-edit -m "Merge upstream ${{ steps.upstream.outputs.tag }}" \
             "refs/tags/${{ steps.upstream.outputs.tag }}"
-
-      - name: Setup Node.js
-        if: steps.upstream.outputs.new == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
 
       - name: Setup Bun
         if: steps.upstream.outputs.new == 'true'
@@ -113,7 +124,10 @@ jobs:
             bun install --frozen-lockfile > /dev/null
             failing "$RUNNER_TEMP/upstream.log" > "$RUNNER_TEMP/upstream-fail.txt"
           ) || exit 1
-          added="$(comm -23 "$RUNNER_TEMP/merged-fail.txt" "$RUNNER_TEMP/upstream-fail.txt")"
+          added="$(comm -23 "$RUNNER_TEMP/merged-fail.txt" "$RUNNER_TEMP/upstream-fail.txt" \
+            | grep -vF -- "$IGNORED_TESTS" || true)"
+          ignored="$(grep -cF -- "$IGNORED_TESTS" "$RUNNER_TEMP/merged-fail.txt" || true)"
+          echo "Ignored locale completeness failures: ${ignored}"
           if [ -n "$added" ]; then
             echo "The merge adds test failures:"
             echo "$added"
