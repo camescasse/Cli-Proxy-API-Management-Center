@@ -168,5 +168,6 @@ jobs:
             echo
             git log --pretty=format:'- %h %s' --no-merges "HEAD^1..HEAD^2"
           } > release-notes.md
-          gh release create "$release" dist/management.html \
+          # --repo: gh would otherwise prefer the "upstream" remote added above.
+          gh release create "$release" dist/management.html --repo "$GITHUB_REPOSITORY" \
             --title "$release" --notes-file release-notes.md --latest
