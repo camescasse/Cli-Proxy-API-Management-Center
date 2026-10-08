@@ -115,7 +115,8 @@ jobs:
               tail -n 20 "$1" >&2
               return 1
             fi
-            grep -E '^\(fail\) ' "$1" | sed -E 's/ \[[0-9.]+m?s\]$//' | sort -u
+            # No failing tests is a valid result: grep exits 1 on no match.
+            { grep -E '^\(fail\) ' "$1" || true; } | sed -E 's/ \[[0-9.]+m?s\]$//' | sort -u
           }
           failing "$RUNNER_TEMP/merged.log" > "$RUNNER_TEMP/merged-fail.txt" || exit 1
           git worktree add --quiet "$RUNNER_TEMP/upstream" "refs/tags/${{ steps.upstream.outputs.tag }}"
