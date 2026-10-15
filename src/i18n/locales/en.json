@@ -610,6 +610,7 @@
     "inactive": "Subscription inactive",
     "window": "Usage window",
     "window_duration": "{{minutes}}-minute window",
+    "window_duration_hours": "{{hours}}-hour window",
     "weekly": "7-day limit",
     "unknown": "Unknown",
     "remaining": "{{percent}}% remaining"
