@@ -10,9 +10,10 @@ name: Sync upstream release
 # stops the run before anything is pushed or published.
 #
 # The fork edits upstream's locale files, so they merge key by key
-# (.github/scripts/json-merge.mjs) instead of line by line. Upstream's
-# per-locale completeness tests are ignored: the fork translates its strings
-# only into some locales, and the others fall back.
+# (.github/scripts/json-merge.mjs) instead of line by line. The fork deletes
+# upstream's locale tests: it translates its strings only into some locales,
+# and the others fall back. Files the fork deletes stay deleted when upstream
+# changes them. New upstream per-locale completeness tests are ignored.
 
 on:
   schedule:
@@ -89,14 +90,25 @@ jobs:
           echo 'src/i18n/locales/*.json merge=localejson' >> .git/info/attributes
           git config merge.localejson.name 'JSON key-by-key merge'
           git config merge.localejson.driver 'node .github/scripts/json-merge.mjs %O %A %B'
-          git merge --no-ff --no-edit -m "Merge upstream ${{ steps.upstream.outputs.tag }}" \
-            "refs/tags/${{ steps.upstream.outputs.tag }}"
+          if ! git merge --no-ff --no-edit -m "Merge upstream ${{ steps.upstream.outputs.tag }}" \
+            "refs/tags/${{ steps.upstream.outputs.tag }}"; then
+            # Keep the files that the fork deleted, also when upstream changes them.
+            git status --porcelain=v1 | sed -n 's/^DU //p' | xargs -r git rm --quiet --
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            if [ -n "$conflicts" ]; then
+              echo "The merge has conflicts:" >&2
+              echo "$conflicts" >&2
+              exit 1
+            fi
+            git commit --quiet --no-edit --cleanup=strip
+          fi
 
+      # The merged package.json holds upstream's pinned Bun release.
       - name: Setup Bun
         if: steps.upstream.outputs.new == 'true'
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.14'
+          bun-version-file: package.json
 
       - name: Install dependencies
         if: steps.upstream.outputs.new == 'true'
